@@ -3,20 +3,11 @@ import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { BibleScreen } from './src/screens/BibleScreen';
+import { RootTabParamList } from './src/types/navigation';
 
-const Tab = createBottomTabNavigator();
-
-const HomeScreen = () => (
-  <View style={styles.screen}>
-    <Text>Home Screen</Text>
-  </View>
-);
-
-const BibleScreen = () => (
-  <View style={styles.screen}>
-    <Text>Bible Screen</Text>
-  </View>
-);
+const Tab = createBottomTabNavigator<RootTabParamList>();
 
 const ChatScreen = () => (
   <View style={styles.screen}>
