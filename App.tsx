@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { BibleScreen } from './src/screens/BibleScreen';
+import { NotesScreen } from './src/screens/NotesScreen';
 import { RootTabParamList } from './src/types/navigation';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -15,17 +16,7 @@ const ChatScreen = () => (
   </View>
 );
 
-const NotesScreen = () => (
-  <View style={styles.screen}>
-    <Text>Notes Screen</Text>
-  </View>
-);
 
-const PlansScreen = () => (
-  <View style={styles.screen}>
-    <Text>Plans Screen</Text>
-  </View>
-);
 
 export default function App() {
   return (
@@ -77,15 +68,6 @@ export default function App() {
           options={{
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="document-text-outline" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen 
-          name="Plans" 
-          component={PlansScreen}
-          options={{
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="calendar-outline" size={size} color={color} />
             ),
           }}
         />

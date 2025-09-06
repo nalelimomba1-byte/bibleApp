@@ -102,16 +102,6 @@ export const HomeScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Reading Plans Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Reading Plans</Text>
-          <TouchableOpacity style={styles.card}>
-            <View>
-              <Text style={styles.planTitle}>30 Days with Jesus</Text>
-              <Text style={styles.planProgress}>Progress: 12/30 days</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -168,16 +158,6 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   lastRead: {
-    fontSize: 14,
-    color: '#666',
-  },
-  planTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#fff',
-    marginBottom: 6,
-  },
-  planProgress: {
     fontSize: 14,
     color: '#666',
   },

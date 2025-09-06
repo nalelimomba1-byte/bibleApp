@@ -7,6 +7,12 @@ export type RootTabParamList = {
     reference?: string;
   };
   Chat: undefined;
-  Notes: undefined;
-  Plans: undefined;
+  Notes: {
+    prefilledNote?: {
+      bookName: string;
+      chapter: number;
+      verse: number;
+      title: string;
+    };
+  } | undefined;
 };

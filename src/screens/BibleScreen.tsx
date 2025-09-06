@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Modal, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { RootTabParamList } from '../types/navigation';
 import bibleData from '../data/complete-kjv-bible.json';
 import { Ionicons } from '@expo/vector-icons';
+import { NotesService, BookmarksService } from '../services/notesService';
+import { Note, Bookmark } from '../types/bible';
 // Define NKJV data structure type
 interface NKJVBibleData {
   [bookName: string]: {
@@ -32,10 +34,13 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const [showChapterSelector, setShowChapterSelector] = useState(false);
   const [showVerseSelector, setShowVerseSelector] = useState(false);
   const [highlightedVerse, setHighlightedVerse] = useState<number | null>(null);
+  const [verseNotes, setVerseNotes] = useState<{ [verseNumber: number]: Note[] }>({});
+  const [verseBookmarks, setVerseBookmarks] = useState<{ [verseNumber: number]: boolean }>({});
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     loadChapter();
+    loadNotesAndBookmarks();
   }, [currentBook, currentChapter]);
 
   // Watch for changes in route parameters (e.g., when navigating from daily verse)
@@ -88,6 +93,39 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
       
     }
     setLoading(false);
+  };
+
+  const loadNotesAndBookmarks = async () => {
+    try {
+      // Load notes for current chapter
+      const notes = await NotesService.getNotesForVerse(currentBook, currentChapter);
+      const notesMap: { [verseNumber: number]: Note[] } = {};
+      
+      notes.forEach(note => {
+        if (note.verse) {
+          if (!notesMap[note.verse]) {
+            notesMap[note.verse] = [];
+          }
+          notesMap[note.verse].push(note);
+        }
+      });
+      
+      setVerseNotes(notesMap);
+      
+      // Load bookmarks for current chapter
+      const allBookmarks = await BookmarksService.getAllBookmarks();
+      const bookmarksMap: { [verseNumber: number]: boolean } = {};
+      
+      allBookmarks.forEach(bookmark => {
+        if (bookmark.bookName === currentBook && bookmark.chapter === currentChapter) {
+          bookmarksMap[bookmark.verse] = true;
+        }
+      });
+      
+      setVerseBookmarks(bookmarksMap);
+    } catch (error) {
+      console.error('Error loading notes and bookmarks:', error);
+    }
   };
 
   const navigateChapter = (direction: 'prev' | 'next') => {
@@ -169,6 +207,75 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     return verses.map(v => v.verse);
   };
 
+  const handleVerseAction = (verseNumber: number) => {
+    const verseText = verses.find(v => v.verse === verseNumber)?.text || '';
+    const reference = `${currentBook} ${currentChapter}:${verseNumber}`;
+    
+    Alert.alert(
+      reference,
+      verseText.length > 100 ? verseText.substring(0, 100) + '...' : verseText,
+      [
+        {
+          text: 'Add Note',
+          onPress: () => navigation.navigate('Notes', {
+            prefilledNote: {
+              bookName: currentBook,
+              chapter: currentChapter,
+              verse: verseNumber,
+              title: reference,
+            }
+          }),
+        },
+        {
+          text: verseBookmarks[verseNumber] ? 'Remove Bookmark' : 'Add Bookmark',
+          onPress: () => handleBookmarkToggle(verseNumber),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleBookmarkToggle = async (verseNumber: number) => {
+    try {
+      if (verseBookmarks[verseNumber]) {
+        // Remove bookmark
+        const allBookmarks = await BookmarksService.getAllBookmarks();
+        const bookmark = allBookmarks.find(b => 
+          b.bookName === currentBook && 
+          b.chapter === currentChapter && 
+          b.verse === verseNumber
+        );
+        
+        if (bookmark) {
+          await BookmarksService.removeBookmark(bookmark.id);
+          setVerseBookmarks(prev => ({
+            ...prev,
+            [verseNumber]: false
+          }));
+        }
+      } else {
+        // Add bookmark
+        await BookmarksService.addBookmark({
+          bookName: currentBook,
+          chapter: currentChapter,
+          verse: verseNumber,
+          title: `${currentBook} ${currentChapter}:${verseNumber}`,
+        });
+        
+        setVerseBookmarks(prev => ({
+          ...prev,
+          [verseNumber]: true
+        }));
+      }
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      Alert.alert('Error', 'Failed to update bookmark');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -186,9 +293,13 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
           ) : (
             verses.map((verse) => {
               const isHighlighted = targetVerse === verse.verse || highlightedVerse === verse.verse;
+              const hasNotes = verseNotes[verse.verse] && verseNotes[verse.verse].length > 0;
+              const isBookmarked = verseBookmarks[verse.verse];
+              
               return (
                 <View 
-                  key={verse.verse} 
+
+                key={verse.verse} 
                   style={[
                     styles.verseContainer,
                     isHighlighted && styles.highlightedVerse
@@ -196,9 +307,24 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
                 >
                   <Text style={styles.verseNumber}>{verse.verse}</Text>
                   <Text style={styles.verseText}>{verse.text}</Text>
-                  <TouchableOpacity style={styles.noteIcon}>
-                    <Ionicons name="document-text-outline" size={16} color="#666" />
-                  </TouchableOpacity>
+                  <View style={styles.verseActions}>
+                    {isBookmarked && (
+                      <Ionicons name="bookmark" size={14} color="#FFD700" style={styles.actionIcon} />
+                    )}
+                    {hasNotes && (
+                      <Text style={styles.noteCount}>{verseNotes[verse.verse].length}</Text>
+                    )}
+                    <TouchableOpacity 
+                      style={styles.noteIcon} 
+                      onPress={() => handleVerseAction(verse.verse)}
+                    >
+                      <Ionicons 
+                        name={hasNotes ? "document-text" : "document-text-outline"} 
+                        size={16} 
+                        color={hasNotes ? "#4CAF50" : "#666"} 
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               );
             })
@@ -391,6 +517,25 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
     marginTop: 4,
+  },
+  verseActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionIcon: {
+    marginRight: 2,
+  },
+  noteCount: {
+    fontSize: 12,
+    color: '#4CAF50',
+    fontWeight: '500',
+    backgroundColor: '#1E4B1E',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 16,
+    textAlign: 'center',
   },
   noteIcon: {
     padding: 4,
