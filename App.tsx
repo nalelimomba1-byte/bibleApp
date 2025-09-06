@@ -1,50 +1,16 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { View, Text, StyleSheet } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-type RootStackParamList = {
-  Home: undefined;
-  Bible: undefined;
-  Chat: undefined;
-  Notes: undefined;
-  Plans: undefined;
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import { Ionicons } from '@expo/vector-icons';
 
 const Tab = createBottomTabNavigator();
 
-const HomeScreen = () => {
-  const navigation = useNavigation<NavigationProp>();
-  
-  return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>Home Screen</Text>
-      
-      <View style={styles.verseContainer}>
-        <Text style={styles.verseLabel}>Verse of the Day</Text>
-        <Text style={styles.verseText}>"For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life." - John 3:16</Text>
-      </View>
-
-      <View style={styles.quickButtonsContainer}>
-        <TouchableOpacity style={styles.quickButton} onPress={() => navigation.navigate('Bible')}>
-          <Text style={styles.buttonText}>Read Bible</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickButton} onPress={() => navigation.navigate('Chat')}>
-          <Text style={styles.buttonText}>Ask AI</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickButton} onPress={() => navigation.navigate('Notes')}>
-          <Text style={styles.buttonText}>Notes</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickButton} onPress={() => navigation.navigate('Plans')}>
-          <Text style={styles.buttonText}>Plans</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-};
+const HomeScreen = () => (
+  <View style={styles.screen}>
+    <Text>Home Screen</Text>
+  </View>
+);
 
 const BibleScreen = () => (
   <View style={styles.screen}>
@@ -73,12 +39,65 @@ const PlansScreen = () => (
 export default function App() {
   return (
     <NavigationContainer>
-      <Tab.Navigator>
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Bible" component={BibleScreen} />
-        <Tab.Screen name="Chat" component={ChatScreen} />
-        <Tab.Screen name="Notes" component={NotesScreen} />
-        <Tab.Screen name="Plans" component={PlansScreen} />
+      <Tab.Navigator
+        screenOptions={{
+          tabBarStyle: {
+            backgroundColor: '#1a1a1a',
+            borderTopColor: '#333',
+          },
+          tabBarActiveTintColor: '#fff',
+          tabBarInactiveTintColor: '#666',
+          headerStyle: {
+            backgroundColor: '#1a1a1a',
+          },
+          headerTintColor: '#fff',
+        }}
+      >
+        <Tab.Screen 
+          name="Home" 
+          component={HomeScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="home-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Bible" 
+          component={BibleScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="book-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Chat" 
+          component={ChatScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubble-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Notes" 
+          component={NotesScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="document-text-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen 
+          name="Plans" 
+          component={PlansScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" size={size} color={color} />
+            ),
+          }}
+        />
       </Tab.Navigator>
     </NavigationContainer>
   );
@@ -87,46 +106,8 @@ export default function App() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    padding: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  verseContainer: {
-    backgroundColor: '#f5f5f5',
-    padding: 20,
-    borderRadius: 10,
-    marginBottom: 30,
-  },
-  verseLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  verseText: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontStyle: 'italic',
-  },
-  quickButtonsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  quickButton: {
-    backgroundColor: '#007AFF',
-    padding: 15,
-    borderRadius: 8,
-    width: '48%',
+    justifyContent: 'center',
     alignItems: 'center',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+    backgroundColor: '#121212',
   },
 });
