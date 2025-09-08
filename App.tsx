@@ -45,6 +45,7 @@ export default function App() {
           tabBarActiveTintColor: '#ffd166',
           tabBarInactiveTintColor: '#666',
           headerStyle: {
+            borderBottomWidth: 0,
             backgroundColor: '#1a1a1a',
           },
           headerTintColor: '#fff',
