@@ -48,6 +48,8 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const isHeaderHiddenRef = useRef(false);
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
   const verseYPositionsRef = useRef<{ [key: number]: number }>({});
+  const [showVerseOptions, setShowVerseOptions] = useState(false);
+  const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
 
   useEffect(() => {
     // Rola para o topo ao mudar de capítulo
@@ -210,20 +212,30 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     setShowChapterSelector(false);
   };
   
-  // Ação ao pressionar um versículo (função sem alterações)
+  // Ação: abrir opções do versículo (compatível com web/iOS/Android)
   const handleVerseAction = (verseNumber: number) => {
-    // ... (função sem alterações)
-    const verseText = verses.find(v => v.verse === verseNumber)?.text || '';
-    const reference = `${currentBook} ${currentChapter}:${verseNumber}`;
-    Alert.alert(
-      reference,
-      verseText.length > 100 ? verseText.substring(0, 100) + '...' : verseText,
-      [
-        { text: 'Add Note', onPress: () => navigation.navigate('Notes', { prefilledNote: { bookName: currentBook, chapter: currentChapter, verse: verseNumber, title: reference } }) },
-        { text: verseBookmarks[verseNumber] ? 'Remove Bookmark' : 'Add Bookmark', onPress: () => handleBookmarkToggle(verseNumber) },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setSelectedVerse(verseNumber);
+    setShowVerseOptions(true);
+  };
+
+  const handleAddNoteFromOptions = () => {
+    if (selectedVerse == null) return;
+    const reference = `${currentBook} ${currentChapter}:${selectedVerse}`;
+    setShowVerseOptions(false);
+    navigation.navigate('Notes', {
+      prefilledNote: {
+        bookName: currentBook,
+        chapter: currentChapter,
+        verse: selectedVerse,
+        title: reference,
+      }
+    });
+  };
+
+  const handleToggleBookmarkFromOptions = async () => {
+    if (selectedVerse == null) return;
+    await handleBookmarkToggle(selectedVerse);
+    setShowVerseOptions(false);
   };
 
   // Lógica de bookmark (função sem alterações)
@@ -254,32 +266,29 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     const isBookmarked = verseBookmarks[verse.verse];
 
     return (
-      <TouchableOpacity 
-        key={verse.verse} 
-        onPress={() => handleVerseAction(verse.verse)}
-        activeOpacity={0.6}
+      <View
+        key={verse.verse}
+        onLayout={(e) => {
+          verseYPositionsRef.current[verse.verse] = e.nativeEvent.layout.y;
+        }}
+        style={[styles.verseContainer, isHighlighted && styles.highlightedVerse]}
       >
-        <View
-          onLayout={(e) => {
-            verseYPositionsRef.current[verse.verse] = e.nativeEvent.layout.y;
-          }}
-          style={[styles.verseContainer, isHighlighted && styles.highlightedVerse]}
-        >
-          <Text style={styles.verseNumber}>{verse.verse}</Text>
-          <Text style={styles.verseText}>
-            {verse.text}
-            {/* Ícones de notas e favoritos são mostrados no final do texto para um visual mais limpo */}
-            {(hasNotes || isBookmarked) && (
-              <>
-                {' '}
-                {isBookmarked && <Ionicons name="bookmark" size={14} color="#FBC02D" />}
-                {' '}
-                {hasNotes && <Ionicons name="document-text" size={14} color="#4CAF50" />}
-              </>
-            )}
-          </Text>
-        </View>
-      </TouchableOpacity>
+        <Text style={styles.verseNumber}>{verse.verse}</Text>
+        <Text style={styles.verseText}>
+          {verse.text}
+          {(hasNotes || isBookmarked) && (
+            <>
+              {' '}
+              {isBookmarked && <Ionicons name="bookmark" size={14} color="#FBC02D" />}
+              {' '}
+              {hasNotes && <Ionicons name="document-text" size={14} color="#4CAF50" />}
+            </>
+          )}
+        </Text>
+        <TouchableOpacity onPress={() => handleVerseAction(verse.verse)}>
+          <Ionicons name="ellipsis-horizontal" size={18} color="#ddd" />
+        </TouchableOpacity>
+      </View>
     );
   };
 
@@ -353,6 +362,27 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
             )}
           />
         </SafeAreaView>
+      </Modal>
+
+      {/* Modal de opções do versículo */}
+      <Modal visible={showVerseOptions} animationType="slide" transparent>
+        <View style={styles.optionsOverlay}>
+          <View style={styles.optionsSheet}>
+            <Text style={styles.optionsTitle}>{selectedVerse != null ? `${currentBook} ${currentChapter}:${selectedVerse}` : 'Options'}</Text>
+            <TouchableOpacity style={styles.optionsItem} onPress={handleAddNoteFromOptions}>
+              <Ionicons name="document-text-outline" size={18} color="#fff" style={styles.optionsIcon} />
+              <Text style={styles.optionsItemText}>Add Note</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.optionsItem} onPress={handleToggleBookmarkFromOptions}>
+              <Ionicons name={verseBookmarks[selectedVerse ?? -1] ? 'bookmark' : 'bookmark-outline'} size={18} color="#fff" style={styles.optionsIcon} />
+              <Text style={styles.optionsItemText}>{verseBookmarks[selectedVerse ?? -1] ? 'Remove Bookmark' : 'Add Bookmark'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.optionsItem, styles.optionsCancel]} onPress={() => setShowVerseOptions(false)}>
+              <Ionicons name="close" size={18} color="#fff" style={styles.optionsIcon} />
+              <Text style={styles.optionsItemText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={showChapterSelector} animationType="slide" presentationStyle="pageSheet">
@@ -480,8 +510,45 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia', // SUGERIDO: Usar uma fonte serifada melhora a leitura
   },
   highlightedVerse: {
-    backgroundColor: 'rgba(251, 192, 45, 0.15)', // Cor de destaque sutil
+    backgroundColor: 'rgba(0, 148, 56, 0.15)', // Cor de destaque sutil
     borderRadius: 8,
+  },
+  optionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0)',
+    justifyContent: 'flex-end',
+  },
+  optionsSheet: {
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  optionsTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  optionsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  optionsCancel: {
+    borderBottomWidth: 0,
+  },
+  optionsIcon: {
+    marginRight: 10,
+  },
+  optionsItemText: {
+    color: '#fff',
+    fontSize: 16,
   },
   // ESTILOS DOS MODAIS
   modalContainer: {
