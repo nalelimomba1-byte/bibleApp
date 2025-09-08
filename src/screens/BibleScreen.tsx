@@ -373,6 +373,21 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
               <Ionicons name="document-text-outline" size={18} color="#fff" style={styles.optionsIcon} />
               <Text style={styles.optionsItemText}>Add Note</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.optionsItem}
+              onPress={() => {
+                if (selectedVerse == null) return;
+                const reference = `${currentBook} ${currentChapter}:${selectedVerse}`;
+                const text = verses.find(v => v.verse === selectedVerse)?.text || '';
+                setShowVerseOptions(false);
+                navigation.navigate('Chat', {
+                  initialPrompt: `Explain and biblically connect this verse: ${reference} — \"${text}\"`,
+                });
+              }}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" style={styles.optionsIcon} />
+              <Text style={styles.optionsItemText}>Ask AI about verse</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.optionsItem} onPress={handleToggleBookmarkFromOptions}>
               <Ionicons name={verseBookmarks[selectedVerse ?? -1] ? 'bookmark' : 'bookmark-outline'} size={18} color="#fff" style={styles.optionsIcon} />
               <Text style={styles.optionsItemText}>{verseBookmarks[selectedVerse ?? -1] ? 'Remove Bookmark' : 'Add Bookmark'}</Text>

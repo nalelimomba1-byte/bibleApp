@@ -6,15 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { BibleScreen } from './src/screens/BibleScreen';
 import { NotesScreen } from './src/screens/NotesScreen';
+import { ChatScreen } from './src/screens/ChatScreen';
 import { RootTabParamList } from './src/types/navigation';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-const ChatScreen = () => (
-  <View style={styles.screen}>
-    <Text>Chat Screen</Text>
-  </View>
-);
+// ChatScreen now lives in src/screens/ChatScreen
 
 // Use a fixed icon size across all tabs to ensure consistent UI on mobile
 const TAB_ICON_SIZE = 22;
