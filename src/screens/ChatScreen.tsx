@@ -17,6 +17,7 @@ import { RouteProp, useRoute } from '@react-navigation/native';
 import { RootTabParamList } from '../types/navigation';
 import { useChat, ChatMessage } from '../hooks/useChat';
 import MessageBubble from '../components/MessageBubble';
+import TypingIndicator from '../components/TypingIndicator';
 
 type ChatRoute = RouteProp<RootTabParamList, 'Chat'>;
 
@@ -58,6 +59,12 @@ export const ChatScreen = () => {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={EmptyChat}
+          ListFooterComponent={loading ? <TypingIndicator /> : null}
+          onContentSizeChange={() => {
+            if (listRef.current && (messages.length > 0 || loading)) {
+              listRef.current.scrollToEnd({ animated: true });
+            }
+          }}
         />
 
         <View style={styles.inputBar}>
@@ -69,7 +76,15 @@ export const ChatScreen = () => {
               placeholderTextColor="#9CA3AF"
               style={styles.input}
               multiline
-              editable={!loading} // Desabilita edição enquanto carrega
+              editable={!loading}
+              textAlignVertical="top"
+              scrollEnabled={true}
+              returnKeyType="default"
+              blurOnSubmit={false}
+              enablesReturnKeyAutomatically={true}
+              accessibilityLabel="Type your message here"
+              accessibilityHint="Type your question about the Bible and press the send button"
+              importantForAccessibility="yes"
             />
             <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={loading || input.trim().length === 0}>
               {loading ? (
@@ -101,28 +116,35 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     backgroundColor: '#181A1B',
     borderTopWidth: 0,
-    
   },
   composer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end', // Align items to bottom for better appearance with expanding input
     backgroundColor: '#2A2B32',
     borderRadius: 24,
-    paddingHorizontal: 8,
-    paddingVertical: Platform.OS === 'ios' ? 8 : 4,
-    minHeight: 44,
-    // remove the outline
-    outline: 'none',
-    
-    
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
+    minHeight: 48,
+    maxHeight: 220, // Slightly more than input maxHeight to account for padding
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   input: {
     flex: 1,
     color: '#fff',
     fontSize: 16,
-    paddingHorizontal: 8,
-    maxHeight: 120,
-  },
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    maxHeight: 200, // Increased max height for better readability
+    minHeight: 24, // Minimum height for empty input
+    borderWidth: 0,
+    outlineWidth: 0,
+    textAlignVertical: 'top', // Better for multiline input
+    paddingVertical: 0, // Better control over vertical padding
+    includeFontPadding: Platform.OS === 'android', // Prevents extra padding on Android
+  } as const, // Using const assertion for better type safety
   sendButton: {
     width: 32,
     height: 32,
@@ -131,6 +153,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+    borderWidth: 0,
+    outlineWidth: 0,
   },
   emptyContainer: {
     flex: 1,

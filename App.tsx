@@ -8,6 +8,7 @@ import { BibleScreen } from './src/screens/BibleScreen';
 import { NotesScreen } from './src/screens/NotesScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { RootTabParamList } from './src/types/navigation';
+import { LastVerseProvider } from './src/contexts/LastVerseContext';
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
@@ -20,74 +21,75 @@ const TAB_ICON_SIZE = 22;
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          tabBarStyle: {
-            backgroundColor: '#181A1B',
-            borderTopWidth: 0,
-            borderTopColor: 'none',
-            height: 54,
-            paddingTop: 0,
-            paddingBottom: 2,
-          },
-          tabBarItemStyle: {
-            paddingVertical: 0,
-          },
-          tabBarLabelStyle: {
-            fontSize: 12,
-            marginBottom:0 ,
-           
-          },
-          tabBarAllowFontScaling: true,
-          tabBarActiveTintColor: '#ffd166',
-          tabBarInactiveTintColor: '#666',
-          headerStyle: {
-            borderBottomWidth: 0,
-            backgroundColor: '#181A1B',
-          },
-          headerTintColor: '#fff',
-        }}
-      >
-        <Tab.Screen 
-          name="Home" 
-          component={HomeScreen}
-          options={{
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={TAB_ICON_SIZE} color={color} />
-            ),
+    <LastVerseProvider>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            tabBarStyle: {
+              backgroundColor: '#181A1B',
+              borderTopWidth: 0,
+              borderTopColor: 'none',
+              height: 54,
+              paddingTop: 0,
+              paddingBottom: 2,
+            },
+            tabBarItemStyle: {
+              paddingVertical: 0,
+            },
+            tabBarLabelStyle: {
+              fontSize: 12,
+              marginBottom: 0,
+            },
+            tabBarAllowFontScaling: true,
+            tabBarActiveTintColor: '#ffd166',
+            tabBarInactiveTintColor: '#666',
+            headerStyle: {
+              borderBottomWidth: 0,
+              backgroundColor: '#181A1B',
+            },
+            headerTintColor: '#fff',
           }}
-        />
-        <Tab.Screen 
-          name="Bible" 
-          component={BibleScreen}
-          options={{
-            headerShown: false,
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="book-outline" size={TAB_ICON_SIZE} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen 
-          name="Chat" 
-          component={ChatScreen}
-          options={{
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubble-outline" size={TAB_ICON_SIZE} color={color} />
-            ),
-          }}
-        />
-        <Tab.Screen 
-          name="Notes" 
-          component={NotesScreen}
-          options={{
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="document-text-outline" size={TAB_ICON_SIZE} color={color} />
-            ),
-          }}
-        />
-      </Tab.Navigator>
-    </NavigationContainer>
+        >
+          <Tab.Screen
+            name="Home"
+            component={HomeScreen}
+            options={{
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="home-outline" size={TAB_ICON_SIZE} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="Bible"
+            component={BibleScreen}
+            options={{
+              headerShown: false,
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="book-outline" size={TAB_ICON_SIZE} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="Chat"
+            component={ChatScreen}
+            options={{
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="chatbubble-outline" size={TAB_ICON_SIZE} color={color} />
+              ),
+            }}
+          />
+          <Tab.Screen
+            name="Notes"
+            component={NotesScreen}
+            options={{
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="document-text-outline" size={TAB_ICON_SIZE} color={color} />
+              ),
+            }}
+          />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </LastVerseProvider>
   );
 }
 

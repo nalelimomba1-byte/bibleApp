@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, ImageBackground } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useLastVerse } from '../contexts/LastVerseContext';
 import { RootTabParamList } from '../types/navigation';
 import bibleData from '../data/complete-kjv-bible.json';
 import { NKJVBibleData } from '../types/bible';
@@ -20,6 +21,8 @@ export const HomeScreen = () => {
     text: 'For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.',
     reference: 'John 3:16'
   });
+
+  const { lastVerse } = useLastVerse();
 
   const typedBibleData = bibleData as NKJVBibleData;
 
@@ -58,19 +61,45 @@ export const HomeScreen = () => {
     });
   };
 
+  const handleVersePress = (book: string, chapter: number, verse: number) => {
+    navigation.navigate('Bible', { book, chapter, verse });
+  };
+
   React.useEffect(() => {
     getDailyVerse();
   }, []);
 
   const handleDailyVersePress = () => {
-    navigation.navigate('Bible', {
-      book: dailyVerse.book,
-      chapter: dailyVerse.chapter,
-      verse: dailyVerse.verse,
-    });
+    handleVersePress(dailyVerse.book, dailyVerse.chapter, dailyVerse.verse);
   };
 
-  // NOVO: Função para saudação dinâmica
+  // Função para formatar o tempo decorrido
+  const getTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    
+    const intervals = {
+      year: 31536000,
+      month: 2592000,
+      week: 604800,
+      day: 86400,
+      hour: 3600,
+      minute: 60,
+      second: 1
+    };
+
+    for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+      const interval = Math.floor(seconds / secondsInUnit);
+      if (interval >= 1) {
+        return interval === 1 
+          ? `Last read 1 ${unit} ago`
+          : `Last read ${interval} ${unit}s ago`;
+      }
+    }
+    
+    return 'Just now';
+  };
+
+  // Função para saudação dinâmica
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good Morning';
@@ -112,16 +141,31 @@ export const HomeScreen = () => {
         </View>
 
         {/* ALTERADO: Seção de Leitura Recente */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Continue Reading</Text>
-          <TouchableOpacity style={styles.infoCard}>
-            <View>
-              <Text style={styles.infoCardTitle}>Psalms 23</Text>
-              <Text style={styles.infoCardSubtitle}>Last read 2 days ago</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={24} color="#555" />
-          </TouchableOpacity>
-        </View>
+        {lastVerse && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Continue Reading</Text>
+            <TouchableOpacity 
+              style={styles.infoCard}
+              onPress={() => handleVersePress(
+                lastVerse.book, 
+                lastVerse.chapter, 
+                lastVerse.verse
+              )}
+            >
+              <View style={styles.infoCardContent}>
+                <Text style={styles.infoCardTitle} numberOfLines={1}>
+                  {lastVerse.reference}
+                </Text>
+                <Text style={styles.infoCardSubtitle}>
+                  {lastVerse.text.length > 60 
+                    ? `${lastVerse.text.substring(0, 60)}...` 
+                    : lastVerse.text}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#555" />
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -211,21 +255,31 @@ const styles = StyleSheet.create({
   },
   // Estilos do Card de Informações (Continue Lendo)
   infoCard: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: '#2A2B32',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoCardContent: {
+    flex: 1,
+    marginRight: 12,
   },
   infoCardTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#fff',
+    marginBottom: 4,
   },
   infoCardSubtitle: {
     fontSize: 14,
     color: '#888',
+    marginTop: 4,
+  },
+  lastReadText: {
+    fontSize: 12,
+    color: '#666',
     marginTop: 4,
   },
   // Estilos dos Cards de Planos

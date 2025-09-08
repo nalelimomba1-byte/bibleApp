@@ -7,6 +7,7 @@ import bibleData from '../data/complete-kjv-bible.json';
 import { Ionicons } from '@expo/vector-icons';
 import { NotesService, BookmarksService } from '../services/notesService';
 import { Note, Bookmark } from '../types/bible';
+import { useLastVerse } from '../contexts/LastVerseContext';
 
 // Define a estrutura de dados da Bíblia
 interface NKJVBibleData {
@@ -48,6 +49,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const isHeaderHiddenRef = useRef(false);
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
   const verseYPositionsRef = useRef<{ [key: number]: number }>({});
+  const { setLastVerse } = useLastVerse();
   const [showVerseOptions, setShowVerseOptions] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
 
@@ -74,10 +76,10 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   useEffect(() => {
     if (targetVerse && verses.length > 0) {
       const attemptScroll = (attempt: number) => {
-        const y = verseYPositionsRef.current[targetVerse as number];
+        const y = verseYPositionsRef.current[targetVerse];
         if (y !== undefined) {
           scrollViewRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
-          setHighlightedVerse(targetVerse as number);
+          setHighlightedVerse(targetVerse);
           setTimeout(() => {
             setHighlightedVerse(null);
             setTargetVerse(null);
@@ -124,37 +126,128 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     lastScrollYRef.current = y;
   };
 
-  const loadChapter = () => {
-    setLoading(true);
-    verseYPositionsRef.current = {};
-    const book = typedBibleData[currentBook];
-    if (book && book[currentChapter.toString()]) {
-      const chapter = book[currentChapter.toString()];
-      setVerses(Object.entries(chapter).map(([verseNumber, text]) => ({
-        verse: parseInt(verseNumber),
-        text: text
-      })));
+  const scrollToVerse = (verseNumber: number) => {
+    const y = verseYPositionsRef.current[verseNumber];
+    if (y !== undefined) {
+      scrollViewRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
+      setHighlightedVerse(verseNumber);
+      setTimeout(() => {
+        setHighlightedVerse(null);
+      }, 2000);
     }
+  };
+
+  const loadVerseNotes = async (verseNumbers: number[]) => {
+    try {
+      const notes = await NotesService.getNotesForVerse(currentBook, currentChapter);
+      const notesMap: { [verseNumber: number]: Note[] } = {};
+      notes.forEach(note => {
+        if (note.verse) {
+          if (!notesMap[note.verse]) {
+            notesMap[note.verse] = [];
+          }
+          notesMap[note.verse].push(note);
+        }
+      });
+      setVerseNotes(notesMap);
+    } catch (error) {
+      console.error('Error loading verse notes:', error);
+    }
+  };
+
+  const loadVerseBookmarks = async (verseNumbers: number[]) => {
+    try {
+      const allBookmarks = await BookmarksService.getAllBookmarks();
+      const bookmarksMap: { [verseNumber: number]: boolean } = {};
+      
+      // Filter bookmarks for current chapter and verses
+      allBookmarks
+        .filter((bookmark: Bookmark) => 
+          bookmark.bookName === currentBook && 
+          bookmark.chapter === currentChapter &&
+          bookmark.verse !== undefined &&
+          verseNumbers.includes(bookmark.verse)
+        )
+        .forEach((bookmark: Bookmark) => {
+          if (bookmark.verse !== undefined) {
+            bookmarksMap[bookmark.verse] = true;
+          }
+        });
+      
+      setVerseBookmarks(bookmarksMap);
+    } catch (error) {
+      console.error('Error loading verse bookmarks:', error);
+    }
+  };
+
+  const loadChapter = (book: string = currentBook, chapter: number = currentChapter, verseToScroll?: number | null) => {
+    setLoading(true);
+    setCurrentBook(book);
+    setCurrentChapter(chapter);
+    setTargetVerse(verseToScroll || null);
+    setShowBookSelector(false);
+    setShowChapterSelector(false);
+    
+    // Carrega os versículos do capítulo
+    const chapterData = typedBibleData[book]?.[chapter];
+    
+    if (chapterData) {
+      const versesList = Object.entries(chapterData)
+        .sort(([a], [b]) => parseInt(a) - parseInt(b))
+        .map(([verseNumber, text]) => ({
+          verse: parseInt(verseNumber),
+          text
+        }));
+      
+      setVerses(versesList);
+      
+      // Carrega as notas e favoritos
+      loadVerseNotes(versesList.map(v => v.verse));
+      loadVerseBookmarks(versesList.map(v => v.verse));
+      
+      // Rola para o versículo alvo após a renderização
+      if (verseToScroll) {
+        setTimeout(() => {
+          scrollToVerse(verseToScroll);
+        }, 100);
+      }
+      
+      // Salva o último versículo lido
+      const lastVerse = {
+        book,
+        chapter,
+        verse: verseToScroll || 1,
+        text: versesList[verseToScroll ? verseToScroll - 1 : 0]?.text || '',
+        reference: `${book} ${chapter}:${verseToScroll || 1}`,
+        timestamp: Date.now()
+      };
+      
+      setLastVerse(lastVerse);
+    }
+    
     setLoading(false);
   };
 
   const loadNotesAndBookmarks = async () => {
-    // ... (função sem alterações)
     try {
-        const notes = await NotesService.getNotesForVerse(currentBook, currentChapter);
-        const notesMap: { [verseNumber: number]: Note[] } = {};
-        notes.forEach(note => {
-            if (note.verse) {
-                if (!notesMap[note.verse]) notesMap[note.verse] = [];
-                notesMap[note.verse].push(note);
-            }
+      const allNotes = await NotesService.getAllNotes();
+      const notesMap: { [verseNumber: number]: Note[] } = {};
+      
+      // Filter notes for current chapter and verses
+      allNotes
+        .filter((note: Note) => note.bookName === currentBook && note.chapter === currentChapter)
+        .forEach((note: Note) => {
+          if (note.verse) {
+            if (!notesMap[note.verse]) notesMap[note.verse] = [];
+            notesMap[note.verse].push(note);
+          }
         });
-        setVerseNotes(notesMap);
+      setVerseNotes(notesMap);
 
-        const allBookmarks = await BookmarksService.getAllBookmarks();
-        const bookmarksMap: { [verseNumber: number]: boolean } = {};
-        allBookmarks.forEach(bookmark => {
-            if (bookmark.bookName === currentBook && bookmark.chapter === currentChapter) {
+      const allBookmarks = await BookmarksService.getAllBookmarks();
+      const bookmarksMap: { [verseNumber: number]: boolean } = {};
+      allBookmarks.forEach((bookmark: Bookmark) => {
+        if (bookmark.bookName === currentBook && bookmark.chapter === currentChapter) {
                 bookmarksMap[bookmark.verse] = true;
             }
         });
@@ -537,7 +630,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1C1C1E',
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 0,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
