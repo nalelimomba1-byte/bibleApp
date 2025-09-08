@@ -16,6 +16,9 @@ const ChatScreen = () => (
   </View>
 );
 
+// Use a fixed icon size across all tabs to ensure consistent UI on mobile
+const TAB_ICON_SIZE = 22;
+
 
 
 export default function App() {
@@ -26,8 +29,20 @@ export default function App() {
           tabBarStyle: {
             backgroundColor: '#1a1a1a',
             borderTopColor: '#333',
+            height: 54,
+            paddingTop: 0,
+            paddingBottom: 2,
           },
-          tabBarActiveTintColor: '#fff',
+          tabBarItemStyle: {
+            paddingVertical: 0,
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            marginBottom:0 ,
+           
+          },
+          tabBarAllowFontScaling: true,
+          tabBarActiveTintColor: '#ffd166',
           tabBarInactiveTintColor: '#666',
           headerStyle: {
             backgroundColor: '#1a1a1a',
@@ -40,7 +55,7 @@ export default function App() {
           component={HomeScreen}
           options={{
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
+              <Ionicons name="home-outline" size={TAB_ICON_SIZE} color={color} />
             ),
           }}
         />
@@ -49,7 +64,7 @@ export default function App() {
           component={BibleScreen}
           options={{
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="book-outline" size={size} color={color} />
+              <Ionicons name="book-outline" size={TAB_ICON_SIZE} color={color} />
             ),
           }}
         />
@@ -58,7 +73,7 @@ export default function App() {
           component={ChatScreen}
           options={{
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubble-outline" size={size} color={color} />
+              <Ionicons name="chatbubble-outline" size={TAB_ICON_SIZE} color={color} />
             ),
           }}
         />
@@ -67,7 +82,7 @@ export default function App() {
           component={NotesScreen}
           options={{
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="document-text-outline" size={size} color={color} />
+              <Ionicons name="document-text-outline" size={TAB_ICON_SIZE} color={color} />
             ),
           }}
         />
@@ -82,5 +97,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#121212',
+    
   },
 });

@@ -392,7 +392,7 @@ export const NotesScreen = ({ navigation, route }: NotesScreenProps) => {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notes</Text>
+        <Text style={styles.headerTitle}></Text>
         <TouchableOpacity style={styles.addButton} onPress={openAddModal}>
           <Ionicons name="add" size={24} color="#fff" />
         </TouchableOpacity>
