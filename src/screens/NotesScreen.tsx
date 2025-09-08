@@ -464,7 +464,7 @@ export const NotesScreen = ({ navigation, route }: NotesScreenProps) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#181A1B',
   },
   header: {
     flexDirection: 'row',

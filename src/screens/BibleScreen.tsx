@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, TouchableOpacity, ActivityIndicator, Modal, FlatList, Alert, Animated, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { RootTabParamList } from '../types/navigation';
 import bibleData from '../data/complete-kjv-bible.json';
 import { Ionicons } from '@expo/vector-icons';
 import { NotesService, BookmarksService } from '../services/notesService';
 import { Note, Bookmark } from '../types/bible';
-// Define NKJV data structure type
+
+// Define a estrutura de dados da Bíblia
 interface NKJVBibleData {
   [bookName: string]: {
     [chapterNumber: string]: {
@@ -15,8 +17,11 @@ interface NKJVBibleData {
   };
 }
 
-// Assert the type of the imported JSON data
+// Garante a tipagem correta do JSON importado
 const typedBibleData = bibleData as NKJVBibleData;
+
+// Altura do cabeçalho personalizado (usada para animação e espaçamento)
+const DEFAULT_HEADER_HEIGHT = 56;
 
 type BibleScreenProps = {
   route: RouteProp<RootTabParamList, 'Bible'>;
@@ -32,103 +37,133 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const [loading, setLoading] = useState(true);
   const [showBookSelector, setShowBookSelector] = useState(false);
   const [showChapterSelector, setShowChapterSelector] = useState(false);
-  const [showVerseSelector, setShowVerseSelector] = useState(false);
+  // REMOVIDO - O seletor de versículo não é mais um modal, a rolagem será usada
+  // const [showVerseSelector, setShowVerseSelector] = useState(false);
   const [highlightedVerse, setHighlightedVerse] = useState<number | null>(null);
   const [verseNotes, setVerseNotes] = useState<{ [verseNumber: number]: Note[] }>({});
   const [verseBookmarks, setVerseBookmarks] = useState<{ [verseNumber: number]: boolean }>({});
   const scrollViewRef = useRef<ScrollView>(null);
+  const headerTranslateY = useRef(new Animated.Value(0)).current;
+  const lastScrollYRef = useRef(0);
+  const isHeaderHiddenRef = useRef(false);
+  const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT);
+  const verseYPositionsRef = useRef<{ [key: number]: number }>({});
 
   useEffect(() => {
+    // Rola para o topo ao mudar de capítulo
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     loadChapter();
     loadNotesAndBookmarks();
   }, [currentBook, currentChapter]);
 
-  // Watch for changes in route parameters (e.g., when navigating from daily verse)
   useEffect(() => {
-    const { verse: newVerse } = route.params || {};
+    const { book: newBook, chapter: newChapter, verse: newVerse } = route.params || {};
+    if (newBook && newBook !== currentBook) {
+      setCurrentBook(newBook);
+    }
+    if (newChapter && newChapter !== currentChapter) {
+      setCurrentChapter(newChapter);
+    }
     if (newVerse && newVerse !== targetVerse) {
       setTargetVerse(newVerse);
     }
   }, [route.params]);
 
-  // Handle targetVerse changes (e.g., from daily verse navigation)
   useEffect(() => {
     if (targetVerse && verses.length > 0) {
-      // Scroll to the target verse
-      setTimeout(() => {
-        const verseIndex = verses.findIndex(v => v.verse === targetVerse);
-        if (verseIndex !== -1 && scrollViewRef.current) {
-          const headerHeight = 120;
-          const verseHeight = 80;
-          const scrollY = headerHeight + (verseIndex * verseHeight) - 50;
-          
-          scrollViewRef.current.scrollTo({ 
-            y: Math.max(0, scrollY), 
-            animated: true 
-          });
+      const attemptScroll = (attempt: number) => {
+        const y = verseYPositionsRef.current[targetVerse as number];
+        if (y !== undefined) {
+          scrollViewRef.current?.scrollTo({ y: Math.max(y - 12, 0), animated: true });
+          setHighlightedVerse(targetVerse as number);
+          setTimeout(() => {
+            setHighlightedVerse(null);
+            setTargetVerse(null);
+          }, 2000);
+        } else if (attempt < 10) {
+          setTimeout(() => attemptScroll(attempt + 1), 100);
         }
-        
-        // Set highlighted verse briefly
-        setHighlightedVerse(targetVerse);
-        
-        // Remove highlight after 1.5 seconds
-        setTimeout(() => {
-          setHighlightedVerse(null);
-          setTargetVerse(null);
-        }, 1500);
-      }, 500);
+      };
+
+      InteractionManager.runAfterInteractions(() => {
+        requestAnimationFrame(() => attemptScroll(0));
+      });
     }
   }, [targetVerse, verses]);
 
+  const showHeader = () => {
+    if (isHeaderHiddenRef.current) {
+      isHeaderHiddenRef.current = false;
+      Animated.timing(headerTranslateY, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const hideHeader = () => {
+    if (!isHeaderHiddenRef.current) {
+      isHeaderHiddenRef.current = true;
+      Animated.timing(headerTranslateY, {
+        toValue: -headerHeight,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const handleOnScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const delta = y - lastScrollYRef.current;
+    // Oculta ao rolar para baixo, mostra ao rolar para cima
+    if (delta > 6) hideHeader();
+    else if (delta < -6) showHeader();
+    lastScrollYRef.current = y;
+  };
+
   const loadChapter = () => {
     setLoading(true);
+    verseYPositionsRef.current = {};
     const book = typedBibleData[currentBook];
     if (book && book[currentChapter.toString()]) {
       const chapter = book[currentChapter.toString()];
-      const verses = Object.entries(chapter).map(([verseNumber, text]) => ({
+      setVerses(Object.entries(chapter).map(([verseNumber, text]) => ({
         verse: parseInt(verseNumber),
         text: text
-      }));
-      setVerses(verses);
-      
+      })));
     }
     setLoading(false);
   };
 
   const loadNotesAndBookmarks = async () => {
+    // ... (função sem alterações)
     try {
-      // Load notes for current chapter
-      const notes = await NotesService.getNotesForVerse(currentBook, currentChapter);
-      const notesMap: { [verseNumber: number]: Note[] } = {};
-      
-      notes.forEach(note => {
-        if (note.verse) {
-          if (!notesMap[note.verse]) {
-            notesMap[note.verse] = [];
-          }
-          notesMap[note.verse].push(note);
-        }
-      });
-      
-      setVerseNotes(notesMap);
-      
-      // Load bookmarks for current chapter
-      const allBookmarks = await BookmarksService.getAllBookmarks();
-      const bookmarksMap: { [verseNumber: number]: boolean } = {};
-      
-      allBookmarks.forEach(bookmark => {
-        if (bookmark.bookName === currentBook && bookmark.chapter === currentChapter) {
-          bookmarksMap[bookmark.verse] = true;
-        }
-      });
-      
-      setVerseBookmarks(bookmarksMap);
+        const notes = await NotesService.getNotesForVerse(currentBook, currentChapter);
+        const notesMap: { [verseNumber: number]: Note[] } = {};
+        notes.forEach(note => {
+            if (note.verse) {
+                if (!notesMap[note.verse]) notesMap[note.verse] = [];
+                notesMap[note.verse].push(note);
+            }
+        });
+        setVerseNotes(notesMap);
+
+        const allBookmarks = await BookmarksService.getAllBookmarks();
+        const bookmarksMap: { [verseNumber: number]: boolean } = {};
+        allBookmarks.forEach(bookmark => {
+            if (bookmark.bookName === currentBook && bookmark.chapter === currentChapter) {
+                bookmarksMap[bookmark.verse] = true;
+            }
+        });
+        setVerseBookmarks(bookmarksMap);
     } catch (error) {
-      console.error('Error loading notes and bookmarks:', error);
+        console.error('Error loading notes and bookmarks:', error);
     }
   };
 
   const navigateChapter = (direction: 'prev' | 'next') => {
+    // ... (função sem alterações)
     const bookNames = Object.keys(typedBibleData);
     const currentBookIndex = bookNames.indexOf(currentBook);
     const currentBookData = typedBibleData[currentBook];
@@ -154,9 +189,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     }
   };
 
-  const getBookNames = () => {
-    return Object.keys(typedBibleData);
-  };
+  const getBookNames = () => Object.keys(typedBibleData);
 
   const getChapterNumbers = () => {
     const book = typedBibleData[currentBook];
@@ -166,227 +199,154 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
 
   const selectBook = (bookName: string) => {
     setCurrentBook(bookName);
-    setCurrentChapter(1); // Reset to first chapter when changing books
+    setCurrentChapter(1);
     setShowBookSelector(false);
+    // ABRE AUTOMATICAMENTE O SELETOR DE CAPÍTULOS PARA MELHORAR O FLUXO
+    setTimeout(() => setShowChapterSelector(true), 400); 
   };
 
   const selectChapter = (chapterNumber: number) => {
     setCurrentChapter(chapterNumber);
     setShowChapterSelector(false);
   };
-
-  const selectVerse = (verseNumber: number) => {
-    setShowVerseSelector(false);
-    
-    // Highlight the selected verse
-    setHighlightedVerse(verseNumber);
-    
-    // Remove highlight after 1.5 seconds
-    setTimeout(() => {
-      setHighlightedVerse(null);
-    }, 1500);
-    
-    // Scroll to the specific verse with better calculation
-    setTimeout(() => {
-      const verseIndex = verses.findIndex(v => v.verse === verseNumber);
-      if (verseIndex !== -1 && scrollViewRef.current) {
-        // More accurate calculation considering header height and verse spacing
-        const headerHeight = 120; // Approximate header height
-        const verseHeight = 80; // More accurate verse height including margins
-        const scrollY = headerHeight + (verseIndex * verseHeight) - 50; // Offset to center the verse
-        
-        scrollViewRef.current.scrollTo({ 
-          y: Math.max(0, scrollY), 
-          animated: true 
-        });
-      }
-    }, 200);
-  };
-
-  const getVerseNumbers = () => {
-    return verses.map(v => v.verse);
-  };
-
+  
+  // Ação ao pressionar um versículo (função sem alterações)
   const handleVerseAction = (verseNumber: number) => {
+    // ... (função sem alterações)
     const verseText = verses.find(v => v.verse === verseNumber)?.text || '';
     const reference = `${currentBook} ${currentChapter}:${verseNumber}`;
-    
     Alert.alert(
       reference,
       verseText.length > 100 ? verseText.substring(0, 100) + '...' : verseText,
       [
-        {
-          text: 'Add Note',
-          onPress: () => navigation.navigate('Notes', {
-            prefilledNote: {
-              bookName: currentBook,
-              chapter: currentChapter,
-              verse: verseNumber,
-              title: reference,
-            }
-          }),
-        },
-        {
-          text: verseBookmarks[verseNumber] ? 'Remove Bookmark' : 'Add Bookmark',
-          onPress: () => handleBookmarkToggle(verseNumber),
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Add Note', onPress: () => navigation.navigate('Notes', { prefilledNote: { bookName: currentBook, chapter: currentChapter, verse: verseNumber, title: reference } }) },
+        { text: verseBookmarks[verseNumber] ? 'Remove Bookmark' : 'Add Bookmark', onPress: () => handleBookmarkToggle(verseNumber) },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
   };
 
+  // Lógica de bookmark (função sem alterações)
   const handleBookmarkToggle = async (verseNumber: number) => {
+    // ... (função sem alterações)
     try {
-      if (verseBookmarks[verseNumber]) {
-        // Remove bookmark
-        const allBookmarks = await BookmarksService.getAllBookmarks();
-        const bookmark = allBookmarks.find(b => 
-          b.bookName === currentBook && 
-          b.chapter === currentChapter && 
-          b.verse === verseNumber
-        );
-        
-        if (bookmark) {
-          await BookmarksService.removeBookmark(bookmark.id);
-          setVerseBookmarks(prev => ({
-            ...prev,
-            [verseNumber]: false
-          }));
+        if (verseBookmarks[verseNumber]) {
+            const allBookmarks = await BookmarksService.getAllBookmarks();
+            const bookmark = allBookmarks.find(b => b.bookName === currentBook && b.chapter === currentChapter && b.verse === verseNumber);
+            if (bookmark) {
+                await BookmarksService.removeBookmark(bookmark.id);
+                setVerseBookmarks(prev => ({ ...prev, [verseNumber]: false }));
+            }
+        } else {
+            await BookmarksService.addBookmark({ bookName: currentBook, chapter: currentChapter, verse: verseNumber, title: `${currentBook} ${currentChapter}:${verseNumber}` });
+            setVerseBookmarks(prev => ({ ...prev, [verseNumber]: true }));
         }
-      } else {
-        // Add bookmark
-        await BookmarksService.addBookmark({
-          bookName: currentBook,
-          chapter: currentChapter,
-          verse: verseNumber,
-          title: `${currentBook} ${currentChapter}:${verseNumber}`,
-        });
-        
-        setVerseBookmarks(prev => ({
-          ...prev,
-          [verseNumber]: true
-        }));
-      }
     } catch (error) {
-      console.error('Error toggling bookmark:', error);
-      Alert.alert('Error', 'Failed to update bookmark');
+        console.error('Error toggling bookmark:', error);
+        Alert.alert('Error', 'Failed to update bookmark');
     }
+  };
+
+  // NOVO: Componente para renderizar versículos
+  const renderVerse = (verse: { verse: number; text: string; }) => {
+    const isHighlighted = targetVerse === verse.verse || highlightedVerse === verse.verse;
+    const hasNotes = verseNotes[verse.verse] && verseNotes[verse.verse].length > 0;
+    const isBookmarked = verseBookmarks[verse.verse];
+
+    return (
+      <TouchableOpacity 
+        key={verse.verse} 
+        onPress={() => handleVerseAction(verse.verse)}
+        activeOpacity={0.6}
+      >
+        <View
+          onLayout={(e) => {
+            verseYPositionsRef.current[verse.verse] = e.nativeEvent.layout.y;
+          }}
+          style={[styles.verseContainer, isHighlighted && styles.highlightedVerse]}
+        >
+          <Text style={styles.verseNumber}>{verse.verse}</Text>
+          <Text style={styles.verseText}>
+            {verse.text}
+            {/* Ícones de notas e favoritos são mostrados no final do texto para um visual mais limpo */}
+            {(hasNotes || isBookmarked) && (
+              <>
+                {' '}
+                {isBookmarked && <Ionicons name="bookmark" size={14} color="#FBC02D" />}
+                {' '}
+                {hasNotes && <Ionicons name="document-text" size={14} color="#4CAF50" />}
+              </>
+            )}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Cabeçalho animado: oculta ao rolar para baixo e reaparece ao rolar para cima */}
+      <Animated.View 
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+        style={[styles.header, { transform: [{ translateY: headerTranslateY }] }]}
+      >
+        <TouchableOpacity onPress={() => navigateChapter('prev')} style={styles.headerNavButton}>
+          <Ionicons name="chevron-back" size={28} color="#fff" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => setShowBookSelector(true)} style={styles.headerReferenceButton}>
+          <Text style={styles.headerReferenceText}>{`${currentBook} ${currentChapter}`}</Text>
+          <Ionicons name="chevron-down" size={16} color="#fff" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity onPress={() => navigateChapter('next')} style={styles.headerNavButton}>
+          <Ionicons name="chevron-forward" size={28} color="#fff" />
+        </TouchableOpacity>
+      </Animated.View>
+
       <ScrollView 
         ref={scrollViewRef} 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: headerHeight }]}
         showsVerticalScrollIndicator={false}
+        onScroll={handleOnScroll}
+        scrollEventThrottle={16}
       >
-        <View style={styles.header}>
-          <Text style={styles.bookTitle}>{currentBook}</Text>
-          <Text style={styles.chapterNumber}>{currentChapter}</Text>
-        </View>
-        <View style={styles.versesContainer}>
-          {loading ? (
-            <ActivityIndicator size="large" color="#fff" />
-          ) : (
-            verses.map((verse) => {
-              const isHighlighted = targetVerse === verse.verse || highlightedVerse === verse.verse;
-              const hasNotes = verseNotes[verse.verse] && verseNotes[verse.verse].length > 0;
-              const isBookmarked = verseBookmarks[verse.verse];
-              
-              return (
-                <View 
-
-                key={verse.verse} 
-                  style={[
-                    styles.verseContainer,
-                    isHighlighted && styles.highlightedVerse
-                  ]}
-                >
-                  <Text style={styles.verseNumber}>{verse.verse}</Text>
-                  <Text style={styles.verseText}>{verse.text}</Text>
-                  <View style={styles.verseActions}>
-                    {isBookmarked && (
-                      <Ionicons name="bookmark" size={14} color="#FFD700" style={styles.actionIcon} />
-                    )}
-                    {hasNotes && (
-                      <Text style={styles.noteCount}>{verseNotes[verse.verse].length}</Text>
-                    )}
-                    <TouchableOpacity 
-                      style={styles.noteIcon} 
-                      onPress={() => handleVerseAction(verse.verse)}
-                    >
-                      <Ionicons 
-                        name={hasNotes ? "document-text" : "document-text-outline"} 
-                        size={16} 
-                        color={hasNotes ? "#4CAF50" : "#666"} 
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
-          )}
-        </View>
+        {loading ? (
+          <ActivityIndicator size="large" color="#fff" style={{ marginTop: 50 }} />
+        ) : (
+          <View style={styles.content}>
+            {/* NOVO: Título do livro e "Drop Cap" do capítulo */}
+            <Text style={styles.bookTitle}>{currentBook}</Text>
+            <Text style={styles.chapterNumberDropCap}>{currentChapter}</Text>
+            
+            <View style={styles.versesContainer}>
+              {verses.map(renderVerse)}
+            </View>
+          </View>
+        )}
       </ScrollView>
 
-      <View style={styles.navigationBar}>
-        <TouchableOpacity onPress={() => navigateChapter('prev')} style={styles.navButton}>
-          <Ionicons name="chevron-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        
-        <View style={styles.selectionControls}>
-          <TouchableOpacity onPress={() => setShowBookSelector(true)} style={styles.bottomSelector}>
-            <Text style={styles.bottomSelectorText}>{currentBook}</Text>
-            <Ionicons name="chevron-down" size={14} color="#fff" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => setShowChapterSelector(true)} style={styles.bottomSelector}>
-            <Text style={styles.bottomSelectorText}>{currentChapter}</Text>
-            <Ionicons name="chevron-down" size={14} color="#fff" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity onPress={() => setShowVerseSelector(true)} style={styles.bottomSelector}>
-            <Text style={styles.bottomSelectorText}>Verse</Text>
-            <Ionicons name="chevron-down" size={14} color="#fff" />
-          </TouchableOpacity>
-        </View>
-        
-        <TouchableOpacity onPress={() => navigateChapter('next')} style={styles.navButton}>
-          <Ionicons name="chevron-forward" size={24} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      {/* REMOVIDO: Barra de navegação inferior foi movida para o cabeçalho */}
 
-      {/* Book Selection Modal */}
-      <Modal
-        visible={showBookSelector}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
+      {/* MODAIS (com pequenas melhorias de estilo) */}
+      <Modal visible={showBookSelector} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Select Book</Text>
             <TouchableOpacity onPress={() => setShowBookSelector(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
           <FlatList
             data={getBookNames()}
             keyExtractor={(item) => item}
+            showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[
-                  styles.modalItem,
-                  item === currentBook && styles.selectedModalItem
-                ]}
+                style={[styles.modalItem, item === currentBook && styles.selectedModalItem]}
                 onPress={() => selectBook(item)}
               >
-                <Text style={[
-                  styles.modalItemText,
-                  item === currentBook && styles.selectedModalItemText
-                ]}>
+                <Text style={[styles.modalItemText, item === currentBook && styles.selectedModalItemText]}>
                   {item}
                 </Text>
               </TouchableOpacity>
@@ -395,70 +355,37 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
         </SafeAreaView>
       </Modal>
 
-      {/* Chapter Selection Modal */}
-      <Modal
-        visible={showChapterSelector}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
+      <Modal visible={showChapterSelector} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Chapter</Text>
+            <Text style={styles.modalTitle}>Select Chapter for {currentBook}</Text>
             <TouchableOpacity onPress={() => setShowChapterSelector(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
+              <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
           </View>
           <FlatList
             data={getChapterNumbers()}
             keyExtractor={(item) => item.toString()}
-            numColumns={4}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.chapterModalItem,
-                  item === currentChapter && styles.selectedModalItem
-                ]}
-                onPress={() => selectChapter(item)}
-              >
-                <Text style={[
-                  styles.chapterModalItemText,
-                  item === currentChapter && styles.selectedModalItemText
-                ]}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
-          />
-        </SafeAreaView>
-      </Modal>
-
-      {/* Verse Selection Modal */}
-      <Modal
-        visible={showVerseSelector}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Verse</Text>
-            <TouchableOpacity onPress={() => setShowVerseSelector(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={getVerseNumbers()}
-            keyExtractor={(item) => item.toString()}
-            numColumns={6}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.verseModalItem}
-                onPress={() => selectVerse(item)}
-              >
-                <Text style={styles.verseModalItemText}>
-                  {item}
-                </Text>
-              </TouchableOpacity>
-            )}
+            numColumns={5} // Ajustado para melhor visualização
+            columnWrapperStyle={styles.gridRow}
+            contentContainerStyle={styles.gridContainer}
+            renderItem={({ item, index }) => {
+              const isLastInRow = (index % 5) === 4;
+              return (
+                <TouchableOpacity
+                  style={[
+                    styles.chapterModalItem,
+                    !isLastInRow && styles.chapterModalItemGap,
+                    item === currentChapter && styles.selectedModalItem
+                  ]}
+                  onPress={() => selectChapter(item)}
+                >
+                  <Text style={[styles.chapterModalItemText, item === currentChapter && styles.selectedModalItemText]}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
           />
         </SafeAreaView>
       </Modal>
@@ -466,121 +393,100 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   );
 };
 
+// NOVO / ALTERADO: StyleSheet completamente redesenhado
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#181A1B',
   },
+  // CABEÇALHO FIXO
   header: {
-    paddingTop: 20,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    backgroundColor: '#121212',
-  },
-  bookTitle: {
-    fontSize: 28,
-    color: '#fff',
-    fontWeight: '500',
-    marginBottom: 5,
-    opacity: 0.87,
-  },
-  chapterNumber: {
-    fontSize: 64,
-    color: '#fff',
-    fontWeight: 'bold',
-    opacity: 0.87,
-  },
-
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  versesContainer: {
-    paddingHorizontal: 20,
-  },
-  verseContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    alignItems: 'flex-start',
-  },
-  verseText: {
-    flex: 1,
-    fontSize: 18,
-    lineHeight: 28,
-    color: '#fff',
-    marginLeft: 12,
-    marginRight: 24,
-    opacity: 0.87,
-  },
-  verseNumber: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-    marginTop: 4,
-  },
-  verseActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  actionIcon: {
-    marginRight: 2,
-  },
-  noteCount: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '500',
-    backgroundColor: '#1E4B1E',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    minWidth: 16,
-    textAlign: 'center',
-  },
-  noteIcon: {
-    padding: 4,
-  },
-  navigationBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    backgroundColor: '#121212',
-  },
-  navButton: {
-    padding: 10,
-  },
-  selectionControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    justifyContent: 'center',
-    gap: 8,
-  },
-  bottomSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingVertical: 12,
+    borderBottomWidth: 0,
+    borderBottomColor: 'none',
+    backgroundColor: '#181A1B', // Garante contraste e capta toques
+    zIndex: 10, // Mantém o cabeçalho acima do conteúdo no Android/iOS
+    elevation: 2, // Necessário no Android para z-order
+  },
+  headerNavButton: {
+    padding: 8,
+  },
+  headerReferenceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: '#333',
   },
-  bottomSelectorText: {
-    fontSize: 14,
+  headerReferenceText: {
+    fontSize: 16,
     color: '#fff',
-    fontWeight: '500',
-    marginRight: 4,
-    opacity: 0.87,
+    fontWeight: '600',
+    marginRight: 8,
   },
-  // Modal styles
+  // CONTEÚDO DA PÁGINA
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  content: {
+    paddingHorizontal: 20,
+  },
+  bookTitle: {
+    fontSize: 32,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: 'bold',
+    marginTop: 24,
+    marginBottom: -20, // Sobrepõe um pouco o número do capítulo
+    textAlign: 'center',
+  },
+  chapterNumberDropCap: {
+    fontSize: 120,
+    color: 'rgba(255, 255, 255, 0.2)',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  versesContainer: {
+    marginTop: -40, // Puxa os versículos para cima, sobre o número
+  },
+  verseContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginVertical: 10,
+    padding: 6,
+    borderRadius: 8,
+  },
+  verseNumber: {
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontWeight: 'bold',
+    marginRight: 8,
+    minWidth: 20, // Garante alinhamento
+    marginTop: 5, // Alinha com a primeira linha do texto
+  },
+  verseText: {
+    flex: 1,
+    fontSize: 19,
+    lineHeight: 32,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontFamily: 'Georgia', // SUGERIDO: Usar uma fonte serifada melhora a leitura
+  },
+  highlightedVerse: {
+    backgroundColor: 'rgba(251, 192, 45, 0.15)', // Cor de destaque sutil
+    borderRadius: 8,
+  },
+  // ESTILOS DOS MODAIS
   modalContainer: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#1C1C1E',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -597,76 +503,44 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   modalItem: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
   selectedModalItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
   },
   modalItemText: {
     fontSize: 18,
-    color: '#fff',
-    opacity: 0.87,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   selectedModalItemText: {
-    color: '#4CAF50',
-    fontWeight: '600',
+    color: '#4CAF50', // Cor de destaque verde
+    fontWeight: 'bold',
+  },
+  gridContainer: {
+    padding: 8,
+  },
+  gridRow: {
+    justifyContent: 'flex-start',
   },
   chapterModalItem: {
-    flex: 1,
-    margin: 8,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 8,
+    width: '18%', // 5 colunas com espaçamento
+    marginVertical: 10,
+    backgroundColor: '#2C2C2E',
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
+    justifyContent: 'center',
+    aspectRatio: 1,
+  },
+  chapterModalItemGap: {
+    marginRight: '2.5%',
   },
   chapterModalItemText: {
-    fontSize: 16,
-    color: '#fff',
+    fontSize: 18,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
-  },
-  verseModalItem: {
-    flex: 1,
-    margin: 4,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    backgroundColor: '#1E1E1E',
-    borderRadius: 6,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  verseModalItemText: {
-    fontSize: 14,
-    color: '#fff',
-    fontWeight: '500',
-  },
-  // Highlight styles for target verse
-  highlightedVerse: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderRadius: 6,
-    padding: 6,
-    marginBottom: 16,
-    borderLeftWidth: 2,
-    borderLeftColor: 'rgba(255, 255, 255, 0.3)',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 1,
-    elevation: 1,
-  },
-  highlightedVerseNumber: {
-    // Keep exactly the same as normal verse number
-  },
-  highlightedVerseText: {
-    // Keep exactly the same as normal verse text
   },
 });
+

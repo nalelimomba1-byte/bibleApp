@@ -27,8 +27,9 @@ export default function App() {
       <Tab.Navigator
         screenOptions={{
           tabBarStyle: {
-            backgroundColor: '#1a1a1a',
-            borderTopColor: '#333',
+            backgroundColor: '#181A1B',
+            borderTopWidth: 0,
+            borderTopColor: 'none',
             height: 54,
             paddingTop: 0,
             paddingBottom: 2,
@@ -46,7 +47,7 @@ export default function App() {
           tabBarInactiveTintColor: '#666',
           headerStyle: {
             borderBottomWidth: 0,
-            backgroundColor: '#1a1a1a',
+            backgroundColor: '#181A1B',
           },
           headerTintColor: '#fff',
         }}
@@ -64,6 +65,7 @@ export default function App() {
           name="Bible" 
           component={BibleScreen}
           options={{
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="book-outline" size={TAB_ICON_SIZE} color={color} />
             ),
