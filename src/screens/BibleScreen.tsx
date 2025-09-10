@@ -38,8 +38,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const [loading, setLoading] = useState(true);
   const [showBookSelector, setShowBookSelector] = useState(false);
   const [showChapterSelector, setShowChapterSelector] = useState(false);
-  // REMOVIDO - O seletor de versículo não é mais um modal, a rolagem será usada
-  // const [showVerseSelector, setShowVerseSelector] = useState(false);
+  const [showVerseSelector, setShowVerseSelector] = useState(false); // NEW: modal to jump to verse
   const [highlightedVerse, setHighlightedVerse] = useState<number | null>(null);
   const [verseNotes, setVerseNotes] = useState<{ [verseNumber: number]: Note[] }>({});
   const [verseBookmarks, setVerseBookmarks] = useState<{ [verseNumber: number]: boolean }>({});
@@ -52,6 +51,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const { setLastVerse } = useLastVerse();
   const [showVerseOptions, setShowVerseOptions] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
+  const [sheetAnimation] = useState(new Animated.Value(0));
 
   useEffect(() => {
     // Rola para o topo ao mudar de capítulo
@@ -134,6 +134,9 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
       setTimeout(() => {
         setHighlightedVerse(null);
       }, 2000);
+    } else {
+      // If not measured yet, set targetVerse so the useEffect will attempt to scroll later
+      setTargetVerse(verseNumber);
     }
   };
 
@@ -309,12 +312,32 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const handleVerseAction = (verseNumber: number) => {
     setSelectedVerse(verseNumber);
     setShowVerseOptions(true);
+    // Animate sheet up
+    Animated.spring(sheetAnimation, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 8,
+    }).start();
+  };
+
+  const closeVerseOptions = () => {
+    // Animate sheet down
+    Animated.spring(sheetAnimation, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 8,
+    }).start(() => {
+      setShowVerseOptions(false);
+      setSelectedVerse(null);
+    });
   };
 
   const handleAddNoteFromOptions = () => {
     if (selectedVerse == null) return;
     const reference = `${currentBook} ${currentChapter}:${selectedVerse}`;
-    setShowVerseOptions(false);
+    closeVerseOptions();
     navigation.navigate('Notes', {
       prefilledNote: {
         bookName: currentBook,
@@ -328,7 +351,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
   const handleToggleBookmarkFromOptions = async () => {
     if (selectedVerse == null) return;
     await handleBookmarkToggle(selectedVerse);
-    setShowVerseOptions(false);
+    closeVerseOptions();
   };
 
   // Lógica de bookmark (função sem alterações)
@@ -352,15 +375,17 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
     }
   };
 
-  // NOVO: Componente para renderizar versículos
+  // NOVO: Componente para renderizar versículos - ENTIRE ROW IS CLICKABLE and removed ellipsis icon
   const renderVerse = (verse: { verse: number; text: string; }) => {
     const isHighlighted = targetVerse === verse.verse || highlightedVerse === verse.verse;
     const hasNotes = verseNotes[verse.verse] && verseNotes[verse.verse].length > 0;
     const isBookmarked = verseBookmarks[verse.verse];
 
     return (
-      <View
+      <TouchableOpacity
         key={verse.verse}
+        activeOpacity={0.8}
+        onPress={() => handleVerseAction(verse.verse)}
         onLayout={(e) => {
           verseYPositionsRef.current[verse.verse] = e.nativeEvent.layout.y;
         }}
@@ -378,10 +403,7 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
             </>
           )}
         </Text>
-        <TouchableOpacity onPress={() => handleVerseAction(verse.verse)}>
-          <Ionicons name="ellipsis-horizontal" size={18} color="#ddd" />
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -400,10 +422,16 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
           <Text style={styles.headerReferenceText}>{`${currentBook} ${currentChapter}`}</Text>
           <Ionicons name="chevron-down" size={16} color="#fff" />
         </TouchableOpacity>
-        
-        <TouchableOpacity onPress={() => navigateChapter('next')} style={styles.headerNavButton}>
-          <Ionicons name="chevron-forward" size={28} color="#fff" />
-        </TouchableOpacity>
+
+        {/* NEW: Show verse selector / quick jump modal */}
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={() => setShowVerseSelector(true)} style={{ padding: 8, marginRight: 6 }}>
+            <Ionicons name="search" size={20} color="#fff" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigateChapter('next')} style={styles.headerNavButton}>
+            <Ionicons name="chevron-forward" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <ScrollView 
@@ -428,9 +456,8 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
         )}
       </ScrollView>
 
-      {/* REMOVIDO: Barra de navegação inferior foi movida para o cabeçalho */}
+      {/* MODALS */}
 
-      {/* MODAIS (com pequenas melhorias de estilo) */}
       <Modal visible={showBookSelector} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -457,41 +484,109 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
         </SafeAreaView>
       </Modal>
 
-      {/* Modal de opções do versículo */}
-      <Modal visible={showVerseOptions} animationType="slide" transparent>
-        <View style={styles.optionsOverlay}>
-          <View style={styles.optionsSheet}>
-            <Text style={styles.optionsTitle}>{selectedVerse != null ? `${currentBook} ${currentChapter}:${selectedVerse}` : 'Options'}</Text>
-            <TouchableOpacity style={styles.optionsItem} onPress={handleAddNoteFromOptions}>
-              <Ionicons name="document-text-outline" size={18} color="#fff" style={styles.optionsIcon} />
-              <Text style={styles.optionsItemText}>Add Note</Text>
+      {/* Verse Selector Modal (NEW) */}
+      <Modal visible={showVerseSelector} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Jump to Verse — {currentBook} {currentChapter}</Text>
+            <TouchableOpacity onPress={() => setShowVerseSelector(false)}>
+              <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
+          </View>
+          <FlatList
+            data={verses.map(v => v.verse)}
+            keyExtractor={(item) => item.toString()}
+            numColumns={6}
+            contentContainerStyle={styles.gridContainer}
+            renderItem={({ item, index }) => {
+              const isLastInRow = (index % 6) === 5;
+              return (
+                <TouchableOpacity
+                  style={[styles.chapterModalItem, !isLastInRow && styles.chapterModalItemGap]}
+                  onPress={() => {
+                    setShowVerseSelector(false);
+                    // ensure we try to scroll; if not measured yet, set targetVerse
+                    scrollToVerse(item);
+                  }}
+                >
+                  <Text style={styles.chapterModalItemText}>{item}</Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </SafeAreaView>
+      </Modal>
+
+      {/* Bottom Sheet for verse options */}
+      {showVerseOptions && (
+        <>
+          {/* Backdrop */}
+          <TouchableOpacity 
+            style={styles.backdrop} 
+            activeOpacity={1}
+            onPress={closeVerseOptions}
+          />
+          
+          {/* Bottom Sheet */}
+          <Animated.View 
+            style={[
+              styles.bottomSheet,
+              {
+                transform: [{
+                  translateY: sheetAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [300, 0], // Slide up from 300px below
+                  })
+                }],
+                opacity: sheetAnimation,
+              }
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>
+              {selectedVerse != null ? `${currentBook} ${currentChapter}:${selectedVerse}` : 'Options'}
+            </Text>
+            
+            <TouchableOpacity style={styles.sheetOption} onPress={handleAddNoteFromOptions}>
+              <Ionicons name="document-text-outline" size={20} color="#fff" style={styles.sheetOptionIcon} />
+              <Text style={styles.sheetOptionText}>Add Note</Text>
+            </TouchableOpacity>
+            
             <TouchableOpacity
-              style={styles.optionsItem}
+              style={styles.sheetOption}
               onPress={() => {
                 if (selectedVerse == null) return;
                 const reference = `${currentBook} ${currentChapter}:${selectedVerse}`;
                 const text = verses.find(v => v.verse === selectedVerse)?.text || '';
-                setShowVerseOptions(false);
+                closeVerseOptions();
                 navigation.navigate('Chat', {
-                  initialPrompt: `Explain and biblically connect this verse: ${reference} — \"${text}\"`,
+                  initialPrompt: `Explain and biblically connect this verse: ${reference} — \"${text}\"`
                 });
               }}
             >
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" style={styles.optionsIcon} />
-              <Text style={styles.optionsItemText}>Ask AI about verse</Text>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" style={styles.sheetOptionIcon} />
+              <Text style={styles.sheetOptionText}>Ask AI about verse</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.optionsItem} onPress={handleToggleBookmarkFromOptions}>
-              <Ionicons name={verseBookmarks[selectedVerse ?? -1] ? 'bookmark' : 'bookmark-outline'} size={18} color="#fff" style={styles.optionsIcon} />
-              <Text style={styles.optionsItemText}>{verseBookmarks[selectedVerse ?? -1] ? 'Remove Bookmark' : 'Add Bookmark'}</Text>
+            
+            <TouchableOpacity style={styles.sheetOption} onPress={handleToggleBookmarkFromOptions}>
+              <Ionicons 
+                name={verseBookmarks[selectedVerse ?? -1] ? 'bookmark' : 'bookmark-outline'} 
+                size={20} 
+                color="#FBC02D" 
+                style={styles.sheetOptionIcon} 
+              />
+              <Text style={styles.sheetOptionText}>
+                {verseBookmarks[selectedVerse ?? -1] ? 'Remove Bookmark' : 'Add Bookmark'}
+              </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.optionsItem, styles.optionsCancel]} onPress={() => setShowVerseOptions(false)}>
-              <Ionicons name="close" size={18} color="#fff" style={styles.optionsIcon} />
-              <Text style={styles.optionsItemText}>Cancel</Text>
+            
+            <TouchableOpacity style={[styles.sheetOption, styles.sheetCancel]} onPress={closeVerseOptions}>
+              <Ionicons name="close" size={20} color="#999" style={styles.sheetOptionIcon} />
+              <Text style={[styles.sheetOptionText, { color: '#999' }]}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Animated.View>
+        </>
+      )}
 
       <Modal visible={showChapterSelector} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
@@ -621,47 +716,77 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 148, 56, 0.15)', // Cor de destaque sutil
     borderRadius: 8,
   },
-  optionsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0)',
-    justifyContent: 'flex-end',
+  // Bottom Sheet Styles
+  backdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 999,
   },
-  optionsSheet: {
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#1C1C1E',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 0,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 34, // Safe area padding
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 20,
   },
-  optionsTitle: {
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#666',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 20,
     textAlign: 'center',
   },
-  optionsItem: {
+  sheetOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
-  optionsCancel: {
-    borderBottomWidth: 0,
+  sheetOptionIcon: {
+    marginRight: 16,
+    width: 20,
   },
-  optionsIcon: {
-    marginRight: 10,
-  },
-  optionsItemText: {
+  sheetOptionText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
+    fontWeight: '500',
+    flex: 1,
   },
-  // ESTILOS DOS MODAIS
+  sheetCancel: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  // MODALS
   modalContainer: {
     flex: 1,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: '#181A1B',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -673,49 +798,48 @@ const styles = StyleSheet.create({
     borderBottomColor: '#333',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: '#fff',
   },
   modalItem: {
-    paddingHorizontal: 24,
-    paddingVertical: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
   selectedModalItem: {
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    backgroundColor: 'rgba(0, 148, 56, 0.2)',
   },
   modalItemText: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 16,
+    color: '#fff',
   },
   selectedModalItemText: {
-    color: '#4CAF50', // Cor de destaque verde
-    fontWeight: 'bold',
+    color: '#00C853',
+    fontWeight: '600',
   },
   gridContainer: {
-    padding: 8,
+    padding: 16,
   },
   gridRow: {
-    justifyContent: 'flex-start',
+    justifyContent: 'space-between',
   },
   chapterModalItem: {
-    width: '18%', // 5 colunas com espaçamento
-    marginVertical: 10,
-    backgroundColor: '#2C2C2E',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1,
     aspectRatio: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   chapterModalItemGap: {
-    marginRight: '2.5%',
+    marginRight: 12,
   },
   chapterModalItemText: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
-
