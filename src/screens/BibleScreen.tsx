@@ -516,12 +516,11 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
           />
         </SafeAreaView>
       </Modal>
-
       {/* Bottom Sheet for verse options */}
       {showVerseOptions && (
         <>
-          {/* Backdrop - allows scrolling through */}
-          <View style={styles.backdrop} />
+          {/* Backdrop - non-interactive to allow background scroll and clearer text */}
+          <View pointerEvents="none" style={[styles.backdrop, { opacity: 0.2 }]} />
           
           {/* Bottom Sheet */}
           <Animated.View 
@@ -719,9 +718,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
     zIndex: 999,
-    pointerEvents: 'none', // Allow touches to pass through to ScrollView
   },
   bottomSheet: {
     position: 'absolute',
@@ -734,6 +732,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 34, // Safe area padding
+    maxHeight: 360,
     zIndex: 1000,
     shadowColor: '#000',
     shadowOffset: {
