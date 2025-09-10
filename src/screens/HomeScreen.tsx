@@ -109,7 +109,7 @@ export const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* NOVO: Cabeçalho de boas-vindas */}
         <View style={styles.header}>
           <Text style={styles.greetingText}>{getGreeting()}</Text>
