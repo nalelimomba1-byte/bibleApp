@@ -520,12 +520,8 @@ export const BibleScreen = ({ route, navigation }: BibleScreenProps) => {
       {/* Bottom Sheet for verse options */}
       {showVerseOptions && (
         <>
-          {/* Backdrop */}
-          <TouchableOpacity 
-            style={styles.backdrop} 
-            activeOpacity={1}
-            onPress={closeVerseOptions}
-          />
+          {/* Backdrop - allows scrolling through */}
+          <View style={styles.backdrop} />
           
           {/* Bottom Sheet */}
           <Animated.View 
@@ -725,6 +721,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     zIndex: 999,
+    pointerEvents: 'none', // Allow touches to pass through to ScrollView
   },
   bottomSheet: {
     position: 'absolute',
